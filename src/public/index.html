@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>游戏攻略生成器</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: #f5f5f5; color: #1a1a1a; line-height: 1.6;
+    min-height: 100vh;
+  }
+  .app { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+
+  /* Header */
+  .header { text-align: center; padding: 32px 0 24px; }
+  .header h1 { font-size: 1.6rem; font-weight: 700; color: #111; }
+  .header p { color: #666; font-size: 0.9rem; margin-top: 4px; }
+
+  /* Form */
+  .form-card {
+    background: #fff; border-radius: 8px; padding: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 24px;
+  }
+  .form-row { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .form-group { flex: 1; min-width: 180px; }
+  .form-group label { display: block; font-size: 0.85rem; font-weight: 600; color: #444; margin-bottom: 4px; }
+  .form-group input, .form-group select {
+    width: 100%; padding: 8px 12px; border: 1px solid #d0d0d0; border-radius: 6px;
+    font-size: 0.9rem; font-family: inherit; background: #fafafa;
+    transition: border-color 0.15s;
+  }
+  .form-group input:focus, .form-group select:focus {
+    outline: none; border-color: #4a90d9; background: #fff;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; border: none; border-radius: 6px;
+    font-size: 0.95rem; font-weight: 600; cursor: pointer;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  .btn-primary { background: #4a90d9; color: #fff; }
+  .btn-primary:hover { background: #3a7bc8; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Status */
+  .status {
+    padding: 12px 16px; border-radius: 6px; margin-bottom: 16px;
+    font-size: 0.9rem; display: none;
+  }
+  .status.loading { display: block; background: #e8f0fe; color: #1a56db; }
+  .status.error { display: block; background: #fde8e8; color: #c81e1e; }
+
+  /* Review badge */
+  .review-bar {
+    display: flex; gap: 16px; flex-wrap: wrap; padding: 16px;
+    background: #f0fdf4; border-radius: 8px; margin-bottom: 20px;
+    border: 1px solid #bbf7d0; font-size: 0.85rem;
+  }
+  .review-bar .score { font-weight: 700; font-size: 1.1rem; }
+  .review-bar .verdict-pass { color: #16a34a; }
+  .review-bar .verdict-revise { color: #d97706; }
+  .review-bar .verdict-reject { color: #dc2626; }
+
+  /* Markdown output */
+  .output { display: none; }
+  .output.visible { display: block; }
+  .md-content {
+    background: #fff; border-radius: 8px; padding: 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    font-size: 0.9rem; line-height: 1.8;
+  }
+  .md-content h1 { font-size: 1.5rem; margin: 0 0 16px; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+  .md-content h2 { font-size: 1.2rem; margin: 24px 0 12px; color: #333; }
+  .md-content h3 { font-size: 1.05rem; margin: 16px 0 8px; color: #555; }
+  .md-content p { margin: 8px 0; }
+  .md-content ul, .md-content ol { padding-left: 24px; margin: 8px 0; }
+  .md-content li { margin: 4px 0; }
+  .md-content code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; }
+  .md-content pre { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 6px; overflow-x: auto; margin: 12px 0; }
+  .md-content pre code { background: none; padding: 0; }
+  .md-content blockquote { border-left: 3px solid #4a90d9; padding: 4px 16px; margin: 12px 0; color: #555; background: #f8fafc; }
+  .md-content table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  .md-content th, .md-content td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+  .md-content th { background: #f5f5f5; font-weight: 600; }
+  .md-content hr { border: none; border-top: 1px solid #eee; margin: 24px 0; }
+  .md-content strong { color: #222; }
+
+  /* Spinner */
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid transparent; border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  
+  /* Revise section */
+  .revise-section {
+    background: #fff; border-radius: 8px; padding: 20px; margin-top: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: none;
+  }
+  .revise-section.visible { display: block; }
+  .revise-section textarea {
+    width: 100%; min-height: 80px; padding: 10px; border: 1px solid #d0d0d0;
+    border-radius: 6px; font-size: 0.9rem; font-family: inherit; resize: vertical;
+    margin-bottom: 12px;
+  }
+  .revise-section textarea:focus { outline: none; border-color: #4a90d9; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn-secondary { background: #6b7280; color: #fff; }
+  .btn-secondary:hover { background: #4b5563; }
+  .btn-success { background: #16a34a; color: #fff; }
+  .btn-success:hover { background: #15803d; }
+  .btn-warning { background: #d97706; color: #fff; }
+  .btn-warning:hover { background: #b45309; }
+
+  .save-result { font-size: 0.85rem; color: #16a34a; margin-top: 8px; display: none; }
+  .save-result.visible { display: block; }
+
+  
+  /* Loaded guide section */
+  .loaded-section {
+    background: #fff; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: none; align-items: center;
+    justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+  .loaded-section.visible { display: flex; }
+  .loaded-section .loaded-badge {
+    background: #ecfdf5; color: #059669; padding: 3px 10px; border-radius: 12px;
+    font-size: 0.8rem; font-weight: 600;
+  }
+  .loaded-section .loaded-title { font-weight: 600; font-size: 0.9rem; flex: 1; min-width: 150px; }
+  .btn-sm { padding: 6px 14px; font-size: 0.82rem; }
+  .btn-outline { background: transparent; border: 1px solid #d0d0d0; color: #555; }
+  .btn-outline:hover { background: #f5f5f5; }
+
+  .guides-dropdown {
+    display: flex; gap: 8px; align-items: center; margin-bottom: 16px;
+    background: #fff; border-radius: 8px; padding: 12px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .guides-dropdown select { flex: 1; padding: 8px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 0.9rem; font-family: inherit; background: #fafafa; }
+  .guides-dropdown label { font-weight: 600; font-size: 0.85rem; color: #444; white-space: nowrap; }
+
+  @media (max-width: 600px) {
+    .form-row { flex-direction: column; }
+    .form-group { min-width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>🎮 游戏攻略生成器</h1>
+    <p>输入游戏和主题，AI 自动生成高质量攻略</p>
+  </div>
+
+    <div class="guides-dropdown" id="guidesDropdown">
+    <label for="guidesList">📂 已保存攻略：</label>
+    <select id="guidesList" onchange="onGuideSelected()">
+      <option value="">-- 选择攻略加载 --</option>
+    </select>
+    <button class="btn btn-outline btn-sm" id="loadBtn" onclick="loadGuide()" disabled>加载</button>
+    <button class="btn btn-outline btn-sm" onclick="refreshGuides()" title="刷新列表">🔄</button>
+  </div>
+
+  <div class="loaded-section" id="loadedSection">
+    <span class="loaded-badge">📄 已加载</span>
+    <span class="loaded-title" id="loadedTitle"></span>
+    <button class="btn btn-outline btn-sm" onclick="clearLoaded()">关闭</button>
+  </div>
+
+  <div class="form-card">
+
+  <div class="form-card">
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label for="game">游戏名称</label>
+        <input id="game" type="text" placeholder="例如：Elden Ring / 艾尔登法环" value="Elden Ring / 艾尔登法环">
+      </div>
+      <div class="form-group">
+        <label for="type">攻略类型</label>
+        <select id="type">
+          <option value="boss_guide">Boss 攻略</option>
+          <option value="build_guide">配装攻略</option>
+          <option value="walkthrough">全流程攻略</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label for="target">目标（Boss名 / Build名 / 留空）</label>
+        <input id="target" type="text" placeholder="例如：Malenia / 玛莲妮亚" value="Malenia, Blade of Miquella / 玛莲妮亚">
+      </div>
+      <div class="form-group">
+        <label for="style">详细程度</label>
+        <select id="style">
+          <option value="detailed">详细</option>
+          <option value="concise">简洁</option>
+          <option value="beginner">新手向</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="generateBtn" onclick="generate()">
+      生成攻略
+    </button>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="output" id="output">
+    <div class="review-bar" id="reviewBar"></div>
+    <div class="md-content" id="mdContent"></div>
+    <div class="btn-row" id="actionButtons" style="margin-top:16px;display:none;">
+      <button class="btn btn-warning" id="reviseBtn" onclick="showRevise()">✏ 提出修改意见</button>
+      <button class="btn btn-success" id="saveBtn" onclick="saveGuide()">💾 保存攻略</button>
+    </div>
+    <div class="revise-section" id="reviseSection">
+      <label style="font-weight:600;display:block;margin-bottom:6px;">修改意见</label>
+      <textarea id="feedbackText" placeholder="例如：请补充 P2 阶段的详细打法、把出血流改成法师流、删除冗余的技能描述..."></textarea>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="reviseSubmitBtn" onclick="submitRevise()">确认修改</button>
+        <button class="btn btn-secondary" onclick="hideRevise()">取消</button>
+      </div>
+    </div>
+    <div class="save-result" id="saveResult"></div>
+  </div>
+</div>
+
+<script>
+const statusEl = document.getElementById("status");
+const outputEl = document.getElementById("output");
+const reviewBar = document.getElementById("reviewBar");
+const mdContent = document.getElementById("mdContent");
+const generateBtn = document.getElementById("generateBtn");
+
+function showStatus(msg, cls) {
+  statusEl.textContent = msg;
+  statusEl.className = "status " + cls;
+}
+
+function hideStatus() { statusEl.className = "status"; }
+
+// Simple markdown to HTML converter (handles common patterns)
+function simpleMarkdown(md) {
+  // Escape HTML
+  let html = md.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  // Code blocks (fenced)
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, "<pre><code>$2</code></pre>");
+
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+  // Bold and italic
+  html = html.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+
+  // Headers
+  html = html.replace(/^#### (.+)$/gm, "<h4>$1</h4>");
+  html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
+  html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
+  html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
+
+  // Horizontal rules
+  html = html.replace(/^---$/gm, "<hr>");
+
+  // Unordered lists
+  html = html.replace(/^(\s*)- (.+)$/gm, "$1<li>$2</li>");
+  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, "<ul>$1</ul>");
+
+  // Blockquotes
+  html = html.replace(/^> (.+)$/gm, "<blockquote>$1</blockquote>");
+
+  // YAML frontmatter (hide it)
+  html = html.replace(/^---[\s\S]*?---\n*/m, "");
+
+  // Paragraphs: double newlines
+  html = html.replace(/\n\n+/g, "</p><p>");
+  html = "<p>" + html + "</p>";
+
+  // Clean up empty paragraphs
+  html = html.replace(/<p>\s*<\/p>/g, "");
+  html = html.replace(/<p>(<(?:h[1-4]|ul|ol|pre|blockquote|hr)[\s>])/g, "$1");
+  html = html.replace(/(<\/(?:ul|ol|pre|blockquote)>)\s*<\/p>/g, "$1");
+
+  return html;
+}
+
+function showReview(r) {
+  const scores = [
+    { k: "accuracy", label: "准确性" },
+    { k: "completeness", label: "完整性" },
+    { k: "actionability", label: "可操作性" },
+    { k: "readability", label: "可读性" },
+  ];
+  let verdictCls = r.verdict === "pass" ? "verdict-pass" : r.verdict === "reject" ? "verdict-reject" : "verdict-revise";
+  let verdictLabel = r.verdict === "pass" ? "✅ 通过" : r.verdict === "reject" ? "❌ 驳回" : "🔶 需修改";
+
+  let html = `<div><span class="score">综合评分: ${r.overall_score}</span> <span class="${verdictCls}">${verdictLabel}</span></div>`;
+  html += scores.map(s => `<div>${s.label}: ${r[s.k]?.score ?? "?"}</div>`).join("");
+  if (r.summary) html += `<div style="width:100%;margin-top:8px;color:#555;">${r.summary}</div>`;
+  reviewBar.innerHTML = html;
+}
+
+async function generate() {
+  const game = document.getElementById("game").value.trim();
+  const type = document.getElementById("type").value;
+  const target = document.getElementById("target").value.trim();
+  const style = document.getElementById("style").value;
+
+  if (!game) { showStatus("请输入游戏名称", "error"); return; }
+
+  outputEl.classList.remove("visible");
+  generateBtn.disabled = true;
+  generateBtn.innerHTML = '<span class="spinner"></span> 生成中...';
+  showStatus("正在调用 AI 生成攻略，请耐心等待（约 30-60 秒）...", "loading");
+
+  try {
+    const resp = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ game, type, target: target || undefined, style }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    hideStatus();
+    showReview(data.review);
+    mdContent.innerHTML = data.html;
+    outputEl.classList.add("visible");
+    outputEl.scrollIntoView({ behavior: "smooth" });
+  } catch (err) {
+    showStatus("生成失败: " + err.message, "error");
+  } finally {
+    generateBtn.disabled = false;
+    generateBtn.innerHTML = "生成攻略";
+  }
+}
+
+// Update target placeholder based on guide type
+document.getElementById("type").addEventListener("change", function() {
+  const t = document.getElementById("target");
+  const placeholders = {
+    boss_guide: "例如：Malenia / 玛莲妮亚",
+    build_guide: "例如：法师流 / 出血流",
+    walkthrough: "留空表示全流程",
+  };
+  t.placeholder = placeholders[this.value] || "";
+});
+async function showRevise() {
+  document.getElementById("reviseSection").classList.add("visible");
+  document.getElementById("feedbackText").focus();
+}
+
+function hideRevise() {
+  document.getElementById("reviseSection").classList.remove("visible");
+  document.getElementById("feedbackText").value = "";
+}
+
+async function submitRevise() {
+  const feedback = document.getElementById("feedbackText").value.trim();
+  if (!feedback) { showStatus("请输入修改意见", "error"); return; }
+
+  generateBtn.disabled = true;
+  generateBtn.innerHTML = '<span class="spinner"></span> 修改中...';
+  showStatus("正在根据意见重新生成攻略...", "loading");
+  hideRevise();
+
+  try {
+    const resp = await fetch("/api/revise", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedback }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    hideStatus();
+    showReview(data.review);
+    mdContent.innerHTML = data.html;
+    document.getElementById("feedbackText").value = "";
+    outputEl.classList.add("visible");
+    outputEl.scrollIntoView({ behavior: "smooth" });
+  } catch (err) {
+    showStatus("修改失败: " + err.message, "error");
+  } finally {
+    generateBtn.disabled = false;
+    generateBtn.innerHTML = "生成攻略";
+  }
+}
+
+async function saveGuide() {
+  const saveBtn = document.getElementById("saveBtn");
+  const saveResult = document.getElementById("saveResult");
+  saveBtn.disabled = true;
+  saveBtn.innerHTML = "保存中...";
+
+  try {
+    const game = document.getElementById("game").value.trim() || "unknown";
+    const type = document.getElementById("type").value;
+    const safeName = game.replace(/[\\/:*?"<>|]/g, "_").slice(0, 30);
+    const resp = await fetch("/api/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: `${safeName}-${type}.md` }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    saveResult.textContent = `✅ 已保存到: ${data.path}`;
+    saveResult.classList.add("visible");
+  } catch (err) {
+    saveResult.textContent = `❌ 保存失败: ${err.message}`;
+    saveResult.classList.add("visible");
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = "💾 保存攻略";
+    setTimeout(() => saveResult.classList.remove("visible"), 5000);
+  }
+}
+
+
+// ---- Guide loading ---------------------------------------------------------
+
+let loadedFilename = null; // null = fresh generation mode
+
+async function refreshGuides() {
+  try {
+    const resp = await fetch("/api/guides");
+    const data = await resp.json();
+    const sel = document.getElementById("guidesList");
+    sel.innerHTML = '<option value="">-- 选择攻略加载 --</option>';
+    (data.guides || []).forEach(g => {
+      const opt = document.createElement("option");
+      opt.value = g.filename;
+      opt.textContent = g.title;
+      sel.appendChild(opt);
+    });
+    document.getElementById("loadBtn").disabled = true;
+  } catch (err) {
+    console.error("Failed to list guides:", err);
+  }
+}
+
+function onGuideSelected() {
+  const sel = document.getElementById("guidesList");
+  document.getElementById("loadBtn").disabled = !sel.value;
+}
+
+async function loadGuide() {
+  const filename = document.getElementById("guidesList").value;
+  if (!filename) return;
+
+  showStatus("正在加载攻略...", "loading");
+  try {
+    const resp = await fetch("/api/guides?file=" + encodeURIComponent(filename));
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    hideStatus();
+
+    // Show loaded badge
+    loadedFilename = filename;
+    document.getElementById("loadedTitle").textContent = data.filename;
+    document.getElementById("loadedSection").classList.add("visible");
+
+    // Display content
+    mdContent.innerHTML = data.html;
+    outputEl.classList.add("visible");
+    document.getElementById("actionButtons").style.display = "flex";
+    document.getElementById("reviewBar").innerHTML = '<span style="color:#666;">📄 从本地文件加载</span>';
+    document.getElementById("saveBtn").textContent = "💾 覆盖保存";
+
+    // Update form to reflect loaded content
+    document.getElementById("saveBtn").textContent = "💾 覆盖保存";
+    outputEl.scrollIntoView({ behavior: "smooth" });
+  } catch (err) {
+    showStatus("加载失败: " + err.message, "error");
+  }
+}
+
+function clearLoaded() {
+  loadedFilename = null;
+  document.getElementById("loadedSection").classList.remove("visible");
+  document.getElementById("saveBtn").textContent = "💾 保存攻略";
+  document.getElementById("actionButtons").style.display = "none";
+  outputEl.classList.remove("visible");
+  document.getElementById("guidesList").value = "";
+  document.getElementById("loadBtn").disabled = true;
+}
+
+// ---- Override save to work with loaded files --------------------------------
+
+var origSaveGuide = saveGuide;
+saveGuide = async function() {
+  if (loadedFilename) {
+    // Save to the loaded file
+    const saveBtn = document.getElementById("saveBtn");
+    const saveResult = document.getElementById("saveResult");
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = "保存中...";
+    try {
+      const resp = await fetch("/api/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: loadedFilename }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.error || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      saveResult.textContent = `✅ 已覆盖保存: ${data.path}`;
+      saveResult.classList.add("visible");
+    } catch (err) {
+      saveResult.textContent = `❌ 保存失败: ${err.message}`;
+      saveResult.classList.add("visible");
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = "💾 覆盖保存";
+      setTimeout(() => saveResult.classList.remove("visible"), 5000);
+    }
+  } else {
+    await origSaveGuide();
+  }
+};
+
+// ---- Override revise to work with loaded content ----------------------------
+
+var origShowRevise = showRevise;
+showRevise = function() {
+  // For loaded content, also show a game name and type input
+  if (loadedFilename) {
+    // Extract game from form or use default
+    document.getElementById("reviseSection").classList.add("visible");
+    document.getElementById("feedbackText").focus();
+  } else {
+    origShowRevise();
+  }
+};
+
+var origSubmitRevise = submitRevise;
+submitRevise = async function() {
+  const feedback = document.getElementById("feedbackText").value.trim();
+  if (!feedback) { showStatus("请输入修改意见", "error"); return; }
+
+  if (loadedFilename) {
+    // Use revise-content endpoint for loaded files
+    generateBtn.disabled = true;
+    generateBtn.innerHTML = '<span class="spinner"></span> 修改中...';
+    showStatus("正在根据意见重新生成攻略...", "loading");
+    hideRevise();
+
+    try {
+      const game = document.getElementById("game").value.trim() || "未知游戏";
+      const type = document.getElementById("type").value;
+      const resp = await fetch("/api/revise-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ game, type, feedback }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.error || `HTTP ${resp.status}`);
+      }
+
+      const data = await resp.json();
+      hideStatus();
+      showReview(data.review);
+      mdContent.innerHTML = data.html;
+      document.getElementById("feedbackText").value = "";
+      outputEl.classList.add("visible");
+      document.getElementById("actionButtons").style.display = "flex";
+      document.getElementById("saveBtn").textContent = "💾 覆盖保存";
+      outputEl.scrollIntoView({ behavior: "smooth" });
+    } catch (err) {
+      showStatus("修改失败: " + err.message, "error");
+    } finally {
+      generateBtn.disabled = false;
+      generateBtn.innerHTML = "生成攻略";
+    }
+  } else {
+    await origSubmitRevise();
+  }
+};
+
+// Initialize: load guide list
+refreshGuides();
+
+// Show action buttons after generation
+var origGenerate = generate;
+generate = async function() {
+  await origGenerate();
+  document.getElementById("actionButtons").style.display = "flex";
+};
+
+</script>
+</body>
+</html>
