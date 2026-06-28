@@ -1,0 +1,21 @@
+{
+  "name": "guide-agent",
+  "version": "0.1.0",
+  "description": "Minimal AI agent for game guide generation",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx src/index.ts",
+    "example": "tsx src/index.ts",
+    "server": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "openai": "^4.70.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
