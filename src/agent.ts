@@ -70,7 +70,7 @@ export class GuideAgent {
       // Caller should check review.verdict and decide not to publish
     }
 
-    // needs_revision: retry once
+    // needs_revision: retry once 
     const revisionMessage = this.buildRevisionMessage(userMessage, review);
     const revised = await this.callGenerator(revisionMessage, schema);
     const reviewV2 = await this.callReviewer(revised);
